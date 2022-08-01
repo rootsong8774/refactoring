@@ -29,7 +29,7 @@ public class StudyDashboard {
         GitHub gitHub = GitHub.connect();
         GHRepository repository = gitHub.getRepository("whiteship/live-study");
         GHIssue issue = repository.getIssue(30);
-
+    
         // Get reviewers
         Set<String> reviewers = new HashSet<>();
         issue.getComments().forEach(c -> reviewers.add(c.getUserName()));
