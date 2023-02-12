@@ -16,9 +16,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class StudyDashboard {
-
+    
+    private final int totalNumberOfEvents;
+    
+    public StudyDashboard(int totalNumberOfEvents) {
+        this.totalNumberOfEvents = totalNumberOfEvents;
+    }
+    
     public static void main(String[] args) throws IOException, InterruptedException {
-        StudyDashboard studyDashboard = new StudyDashboard();
+        StudyDashboard studyDashboard = new StudyDashboard(15);
         studyDashboard.print();
     }
 
@@ -26,38 +32,34 @@ public class StudyDashboard {
         GitHub gitHub = GitHub.connect();
         GHRepository repository = gitHub.getRepository("whiteship/live-study");
         List<Participant> participants = new CopyOnWriteArrayList<>();
-
-        int totalNumberOfEvents = 15;
+    
         ExecutorService service = Executors.newFixedThreadPool(8);
         CountDownLatch latch = new CountDownLatch(totalNumberOfEvents);
 
         for (int index = 1 ; index <= totalNumberOfEvents ; index++) {
             int eventId = index;
-            service.execute(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        GHIssue issue = repository.getIssue(eventId);
-                        List<GHIssueComment> comments = issue.getComments();
+            service.execute(() -> {
+                try {
+                    GHIssue issue = repository.getIssue(eventId);
+                    List<GHIssueComment> comments = issue.getComments();
 
-                        for (GHIssueComment comment : comments) {
-                            String username = comment.getUserName();
-                            boolean isNewUser = participants.stream().noneMatch(p -> p.username().equals(username));
-                            Participant participant = null;
-                            if (isNewUser) {
-                                participant = new Participant(username);
-                                participants.add(participant);
-                            } else {
-                                participant = participants.stream().filter(p -> p.username().equals(username)).findFirst().orElseThrow();
-                            }
-
-                            participant.setHomeworkDone(eventId);
+                    for (GHIssueComment comment : comments) {
+                        String username = comment.getUserName();
+                        boolean isNewUser = participants.stream().noneMatch(p -> p.username().equals(username));
+                        Participant participant;
+                        if (isNewUser) {
+                            participant = new Participant(username);
+                            participants.add(participant);
+                        } else {
+                            participant = participants.stream().filter(p -> p.username().equals(username)).findFirst().orElseThrow();
                         }
 
-                        latch.countDown();
-                    } catch (IOException e) {
-                        throw new IllegalArgumentException(e);
+                        participant.setHomeworkDone(eventId);
                     }
+
+                    latch.countDown();
+                } catch (IOException e) {
+                    throw new IllegalArgumentException(e);
                 }
             });
         }
@@ -69,40 +71,39 @@ public class StudyDashboard {
              PrintWriter writer = new PrintWriter(fileWriter)) {
             participants.sort(Comparator.comparing(Participant::username));
 
-            writer.print(header(totalNumberOfEvents, participants.size()));
+            writer.print(header(participants.size()));
 
             participants.forEach(p -> {
-                String markdownForHomework = getMarkdownForParticipant(totalNumberOfEvents, p);
+                String markdownForHomework = getMarkdownForParticipant(p);
                 writer.print(markdownForHomework);
             });
         }
     }
 
-    private double getRate(int totalNumberOfEvents, Participant p) {
+    private double getRate( Participant p) {
         long count = p.homework().values().stream()
-                .filter(v -> v == true)
+                .filter(v -> v)
                 .count();
-        double rate = count * 100 / totalNumberOfEvents;
-        return rate;
+        return (double) (count * 100 / this.totalNumberOfEvents);
     }
 
-    private String getMarkdownForParticipant(int totalNumberOfEvents, Participant p) {
-        return String.format("| %s %s | %.2f%% |\n", p.username(), checkMark(p, totalNumberOfEvents), getRate(totalNumberOfEvents, p));
+    private String getMarkdownForParticipant(Participant p) {
+        return String.format("| %s %s | %.2f%% |\n", p.username(), checkMark(p, this.totalNumberOfEvents), getRate(p));
     }
 
     /**
      * | 참여자 (420) | 1주차 | 2주차 | 3주차 | 참석율 |
      * | --- | --- | --- | --- | --- |
      */
-    private String header(int totalNumberOfEvents, int totalNumberOfParticipants) {
+    private String header(int totalNumberOfParticipants) {
         StringBuilder header = new StringBuilder(String.format("| 참여자 (%d) |", totalNumberOfParticipants));
 
-        for (int index = 1; index <= totalNumberOfEvents; index++) {
+        for (int index = 1; index <= this.totalNumberOfEvents; index++) {
             header.append(String.format(" %d주차 |", index));
         }
         header.append(" 참석율 |\n");
 
-        header.append("| --- ".repeat(Math.max(0, totalNumberOfEvents + 2)));
+        header.append("| --- ".repeat(Math.max(0, this.totalNumberOfEvents + 2)));
         header.append("|\n");
 
         return header.toString();
