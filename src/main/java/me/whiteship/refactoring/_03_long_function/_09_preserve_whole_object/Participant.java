@@ -11,6 +11,12 @@ public record Participant(String username, Map<Integer, Boolean> homework) {
     public void setHomeworkDone(int index) {
         this.homework.put(index, true);
     }
-
-
+    
+    
+    double getRate(int studyDashboard) {
+        long count = homework().values().stream()
+                .filter(v -> v)
+                .count();
+        return (double) (count * 100 / studyDashboard);
+    }
 }
